@@ -1,0 +1,24 @@
+# Datasets are downloaded separately; the challenge training set is ~17 GB.
+# Anchored, so these do not also match the src/tieredfl/data package.
+/data/
+/physionet.org/
+
+# Extracted reservoir features, run artefacts and logs.
+/.feature_cache/
+/results/
+/logs/
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+/build/
+/dist/
+
+.pytest_cache/
+.ruff_cache/
+
+.DS_Store
+.idea/
+.vscode/
