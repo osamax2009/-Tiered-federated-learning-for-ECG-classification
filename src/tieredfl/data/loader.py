@@ -28,12 +28,32 @@ DATASETS = (
 
 DEFAULT_SUBDIR = Path("physionet.org/files/challenge-2021/1.0.3/training")
 
+# A `wget -r` download nests the records several levels down. Depending on where someone
+# points `data_root` — or symlinks it — any suffix of that path may already be included,
+# so each prefix is tried in turn.
+_LAYOUTS = (
+    DEFAULT_SUBDIR,
+    Path("files/challenge-2021/1.0.3/training"),
+    Path("challenge-2021/1.0.3/training"),
+    Path("1.0.3/training"),
+    Path("training"),
+    Path("."),
+)
+
 
 def resolve_root(root: Path) -> Path:
-    """Accept either the download root or the training directory itself."""
+    """Find the directory holding the dataset folders.
+
+    Accepts the download root, the training directory, or any level between them.
+    Returns the first candidate that actually contains a known dataset; failing that,
+    the path as given, so callers report a missing root rather than a wrong one.
+    """
     root = Path(root).expanduser()
-    nested = root / DEFAULT_SUBDIR
-    return nested if nested.is_dir() else root
+    for layout in _LAYOUTS:
+        candidate = (root / layout).resolve() if layout != Path(".") else root
+        if any((candidate / dataset).is_dir() for dataset in DATASETS):
+            return candidate
+    return root
 
 
 def find_headers(root: Path, dataset: str) -> list[Path]:
