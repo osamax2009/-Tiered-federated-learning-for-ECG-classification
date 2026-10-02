@@ -9,7 +9,6 @@ quality check are dropped rather than repaired.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
 import numpy as np
 
@@ -33,12 +32,12 @@ class Sample:
 
     record_id: str
     signal: np.ndarray
-    labels: Tuple[str, ...]
+    labels: tuple[str, ...]
     source: str
     sampling_rate: float
     quality: float
-    age: Optional[float] = None
-    sex: Optional[str] = None
+    age: float | None = None
+    sex: str | None = None
     iot_degraded: bool = False
 
     @property
@@ -150,7 +149,7 @@ def zscore(signal: np.ndarray, eps: float = 1e-6) -> np.ndarray:
     return np.where(std < eps, signal, (signal - mean) / np.where(std < eps, 1.0, std))
 
 
-def preprocess(record: Record, config: ClinicalConfig) -> Optional[Sample]:
+def preprocess(record: Record, config: ClinicalConfig) -> Sample | None:
     """Run the full clinical stage. Returns ``None`` if the record fails quality control."""
     quality = assess_quality(record.signal)
     if quality < QUALITY_REJECT_THRESHOLD:

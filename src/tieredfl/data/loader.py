@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import logging
 import struct
+from collections.abc import Iterator, Sequence
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Sequence
 
 from .wfdb import Record, read_record
 
@@ -36,7 +36,7 @@ def resolve_root(root: Path) -> Path:
     return nested if nested.is_dir() else root
 
 
-def find_headers(root: Path, dataset: str) -> List[Path]:
+def find_headers(root: Path, dataset: str) -> list[Path]:
     directory = resolve_root(root) / dataset
     if not directory.is_dir():
         return []
@@ -46,7 +46,7 @@ def find_headers(root: Path, dataset: str) -> List[Path]:
 def load_dataset(
     root: Path,
     dataset: str,
-    limit: Optional[int] = None,
+    limit: int | None = None,
     max_samples: int = 5000,
 ) -> Iterator[Record]:
     """Yield records from one dataset, skipping any that fail to parse."""
@@ -65,12 +65,12 @@ def load_dataset(
 def load_by_dataset(
     root: Path,
     datasets: Sequence[str],
-    limits: Optional[Dict[str, int]] = None,
+    limits: dict[str, int] | None = None,
     max_samples: int = 5000,
-) -> Dict[str, List[Record]]:
+) -> dict[str, list[Record]]:
     """Eagerly load several datasets. Prefer :func:`load_dataset` for large limits."""
     limits = limits or {}
-    out: Dict[str, List[Record]] = {}
+    out: dict[str, list[Record]] = {}
     for dataset in datasets:
         records = list(load_dataset(root, dataset, limits.get(dataset), max_samples))
         log.info("%s: loaded %d records", dataset, len(records))

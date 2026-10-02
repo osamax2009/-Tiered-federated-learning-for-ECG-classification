@@ -9,13 +9,13 @@ rather than fixed in advance, so the class set follows whatever subset is in use
 from __future__ import annotations
 
 from collections import Counter
-from typing import Dict, Iterable, List, Optional, Sequence
+from collections.abc import Iterable, Sequence
 
 from .clinical import Sample
 
 # Names for the codes that come up in the challenge subsets used here. Only used for
 # display; unmapped codes fall back to the bare code.
-DIAGNOSIS_NAMES: Dict[str, str] = {
+DIAGNOSIS_NAMES: dict[str, str] = {
     "10370003": "pacing rhythm",
     "111975006": "prolonged QT interval",
     "164865005": "myocardial infarction",
@@ -59,7 +59,7 @@ def count_codes(samples: Iterable[Sample]) -> Counter:
     return counts
 
 
-def top_codes(samples: Iterable[Sample], top_n: int) -> List[str]:
+def top_codes(samples: Iterable[Sample], top_n: int) -> list[str]:
     """The ``top_n`` most frequent codes, most frequent first.
 
     Ties are broken by code so the class ordering is stable across runs.
@@ -69,7 +69,7 @@ def top_codes(samples: Iterable[Sample], top_n: int) -> List[str]:
     return [code for code, _ in ranked[:top_n]]
 
 
-def label_index(labels: Sequence[str], codes: Sequence[str]) -> Optional[int]:
+def label_index(labels: Sequence[str], codes: Sequence[str]) -> int | None:
     """Index of the first class code present in ``labels``, or ``None``.
 
     Records carrying several of the selected codes resolve to the most frequent one,

@@ -12,11 +12,9 @@ three IoT clients overlap; ``disjoint`` reproduces that behaviour when set to ``
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
-
-import numpy as np
 
 from ..federated.tiers import DeviceTier
 from ..seeding import generator
@@ -45,8 +43,8 @@ class ClientData:
     client_id: str
     tier: DeviceTier
     dataset: str
-    train: List[Sample] = field(default_factory=list)
-    validation: List[Sample] = field(default_factory=list)
+    train: list[Sample] = field(default_factory=list)
+    validation: list[Sample] = field(default_factory=list)
 
     def __len__(self) -> int:
         return len(self.train) + len(self.validation)
@@ -60,7 +58,7 @@ def build_clients(
     seed: int = 0,
     scale: float = 1.0,
     disjoint: bool = True,
-) -> List[ClientData]:
+) -> list[ClientData]:
     """Load, preprocess and split records for every client.
 
     Datasets are processed one at a time so that only one source is resident at once.
@@ -75,15 +73,17 @@ def build_clients(
             smoke run exercise the whole pipeline at a fraction of the cost.
         disjoint: allocate non-overlapping records to clients sharing a dataset.
     """
-    by_dataset: Dict[str, List[ClientSpec]] = {}
+    by_dataset: dict[str, list[ClientSpec]] = {}
     for spec in specs:
         by_dataset.setdefault(spec.dataset, []).append(spec)
 
-    clients: List[ClientData] = []
+    clients: list[ClientData] = []
     for dataset, dataset_specs in by_dataset.items():
         wanted = {spec.client_id: _scaled(spec.n_records, scale) for spec in dataset_specs}
         pool_size = sum(wanted.values()) if disjoint else max(wanted.values())
-        records = list(load_dataset(root, dataset, limit=pool_size + 16, max_samples=clinical.target_length))
+        records = list(
+            load_dataset(root, dataset, limit=pool_size + 16, max_samples=clinical.target_length)
+        )
 
         if not records:
             log.warning("%s unavailable; skipping %d client(s)", dataset, len(dataset_specs))
@@ -113,14 +113,14 @@ def _scaled(n_records: int, scale: float) -> int:
 
 
 def _allocate(
-    records: List[Record],
+    records: list[Record],
     specs: Sequence[ClientSpec],
-    wanted: Dict[str, int],
+    wanted: dict[str, int],
     seed: int,
     disjoint: bool,
-) -> Dict[ClientSpec, List[Record]]:
+) -> dict[ClientSpec, list[Record]]:
     """Assign records to the clients drawing from one dataset."""
-    allocation: Dict[ClientSpec, List[Record]] = {}
+    allocation: dict[ClientSpec, list[Record]] = {}
     rng = generator(seed, "allocate", records[0].source)
     order = rng.permutation(len(records))
 
@@ -145,7 +145,7 @@ def _build_client(
     clinical: ClinicalConfig,
     iot: IoTConfig,
     seed: int,
-) -> Optional[ClientData]:
+) -> ClientData | None:
     if not records:
         return None
 
@@ -153,7 +153,7 @@ def _build_client(
     # of how many other clients were built first.
     noise_rng = generator(seed, "iot-noise", iot.seed, spec.client_id)
 
-    samples: List[Sample] = []
+    samples: list[Sample] = []
     for record in records:
         sample = preprocess(record, clinical)
         if sample is None:
@@ -176,9 +176,9 @@ def _build_client(
     )
 
 
-def filter_to_classes(clients: Sequence[ClientData], codes: Sequence[str]) -> List[ClientData]:
+def filter_to_classes(clients: Sequence[ClientData], codes: Sequence[str]) -> list[ClientData]:
     """Drop samples carrying none of the selected class codes, and empty clients with them."""
-    kept: List[ClientData] = []
+    kept: list[ClientData] = []
     for client in clients:
         train = [s for s in client.train if label_index(s.labels, codes) is not None]
         validation = [s for s in client.validation if label_index(s.labels, codes) is not None]

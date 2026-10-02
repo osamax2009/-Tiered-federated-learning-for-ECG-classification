@@ -12,7 +12,6 @@ import re
 import struct
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
 
 import numpy as np
 
@@ -41,12 +40,12 @@ class Lead:
 @dataclass(frozen=True)
 class Header:
     record_id: str
-    leads: List[Lead]
+    leads: list[Lead]
     sampling_rate: float
     n_samples: int
-    age: Optional[float]
-    sex: Optional[str]
-    diagnoses: List[str]
+    age: float | None
+    sex: str | None
+    diagnoses: list[str]
 
 
 @dataclass
@@ -56,9 +55,9 @@ class Record:
     record_id: str
     signal: np.ndarray
     sampling_rate: float
-    diagnoses: List[str]
-    age: Optional[float]
-    sex: Optional[str]
+    diagnoses: list[str]
+    age: float | None
+    sex: str | None
     source: str = ""
 
     @property
@@ -88,9 +87,9 @@ def read_header(path: Path) -> Header:
             )
         )
 
-    age: Optional[float] = None
-    sex: Optional[str] = None
-    diagnoses: List[str] = []
+    age: float | None = None
+    sex: str | None = None
+    diagnoses: list[str] = []
     for line in lines[1 + n_leads :]:
         key, _, value = line.lstrip("#").partition(":")
         key = key.strip().lower()
@@ -104,7 +103,7 @@ def read_header(path: Path) -> Header:
     return Header(record_id, leads, sampling_rate, n_samples, age, sex, diagnoses)
 
 
-def read_mat(path: Path, key: str = "val", max_samples: Optional[int] = None) -> np.ndarray:
+def read_mat(path: Path, key: str = "val", max_samples: int | None = None) -> np.ndarray:
     """Read the matrix stored in a MATLAB level-4 file.
 
     Data is column-major, so truncating to ``max_samples`` columns only requires
@@ -126,7 +125,7 @@ def read_mat(path: Path, key: str = "val", max_samples: Optional[int] = None) ->
 
 def read_record(
     header_path: Path,
-    mat_path: Optional[Path] = None,
+    mat_path: Path | None = None,
     max_samples: int = 5000,
     source: str = "",
 ) -> Record:
@@ -160,7 +159,7 @@ def _to_int(text: str, default: int = 0) -> int:
         return default
 
 
-def _to_float(text: str, default: Optional[float] = None) -> Optional[float]:
+def _to_float(text: str, default: float | None = None) -> float | None:
     try:
         return float(text)
     except ValueError:

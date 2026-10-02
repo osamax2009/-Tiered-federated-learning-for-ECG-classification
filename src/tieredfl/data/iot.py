@@ -9,7 +9,6 @@ wearable, not a sensor model, and the noise level is the knob worth varying.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
@@ -56,7 +55,7 @@ def add_motion_noise(
 def degrade(
     sample: Sample,
     config: IoTConfig,
-    rng: Optional[np.random.Generator] = None,
+    rng: np.random.Generator | None = None,
 ) -> Sample:
     """Reduce a clinical sample to a noisy single-lead trace."""
     rng = rng if rng is not None else np.random.default_rng(config.seed)
