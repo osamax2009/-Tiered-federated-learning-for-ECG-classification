@@ -1,6 +1,9 @@
 # Datasets are downloaded separately; the challenge training set is ~17 GB.
-# Anchored, so these do not also match the src/tieredfl/data package.
+# Anchored, so these do not also match the src/tieredfl/data package. Listed without a
+# trailing slash as well, so a symlink to the data pointed here is ignored too.
+/data
 /data/
+/physionet.org
 /physionet.org/
 
 # Extracted reservoir features, run artefacts and logs.
