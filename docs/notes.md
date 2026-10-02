@@ -74,6 +74,49 @@ Ways to get an honest reading of each mechanism:
 - **To report both**, run the `personal_weight` sweep and show the curve; the endpoints
   separate the two contributions.
 
+## What a first run shows
+
+One run of `configs/full.yaml` at `--scale 0.08`, 30 rounds, seed 0, 34 minutes. **One
+seed at 8% scale** — indicative only, and not a basis for any claim. Two results are
+pointed enough to be worth chasing at full scale.
+
+**The gated arm did not beat FedAvg on anything it can affect.**
+
+```
+global macro_f1      0.4186 vs 0.4329   -0.0143
+wearable macro_f1    0.4611 vs 0.5139   -0.0528
+hospital macro_f1    0.3901 vs 0.3800   +0.0101
+iot present_macro_f1 0.8610 vs 0.8610    0.0000
+```
+
+The chosen weight averaged 0.56 and used the full range, so the gate was active, not
+degenerate. It traded global and wearable performance for a small hospital gain, and the
+IoT row it was optimising for is pinned by the tier head. On this run the gate is a net
+loss. Worth testing at `personal_weight: 0.0`, where its objective reaches the IoT
+numbers and the trade might pay.
+
+**Federating the tier heads added little over local training.**
+
+```
+shared_global          present_macro_f1 0.4500
+restricted_global      present_macro_f1 0.5670
+local_only[iot_cpsc_a] present_macro_f1 0.8042
+local_only[iot_cpsc_b] present_macro_f1 0.8054
+local_only[iot_cpsc_c] present_macro_f1 0.9166
+local_only_mean        present_macro_f1 0.8421
+federated              present_macro_f1 0.8610
+```
+
+The federated head beats the mean of the local-only heads by 0.019 — and one client's
+own head, trained alone on 107 samples, beats the federated head outright. This is the
+comparison `local_only_mean` exists to force: on this run, personalising the tier is
+what helps, and federating the personalised heads is close to free of benefit.
+
+Note also `iot macro_f1 = 0.3444` against `iot present_macro_f1 = 0.8610`. Only two of
+five classes appear in the IoT split, so the five-class average is roughly the
+present-class figure times two fifths. Quoting either number without saying which is how
+this tier gets misreported.
+
 ## Observations worth following up
 
 ### The ridge penalty is large relative to the pooled features
