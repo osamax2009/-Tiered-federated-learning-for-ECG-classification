@@ -1,0 +1,62 @@
+# Full-scale run: nine clients across three device tiers, one dataset per client.
+#
+# Record counts are capped so that clients sharing a dataset can be allocated disjoint
+# records. cpsc_2018 holds 6877 usable records in total, which is what bounds the three
+# IoT clients; cpsc_2018_extra holds 3453. See configs/legacy-overlap.yaml for the
+# sampling scheme used by the original Kotlin implementation.
+
+name: tiered-fl-full
+
+data_root: data
+output_dir: results
+cache_dir: .feature_cache
+
+seed: 0
+scale: 1.0
+disjoint_clients: true
+
+reservoir:
+  size: 1000
+  spectral_radius: 0.95
+  leaking_rate: 0.3
+  input_scaling: 1.0
+  density: 0.1
+  seed: 42
+
+clinical:
+  target_length: 5000
+  target_rate: 500.0
+  bandpass_low_hz: 0.5
+  bandpass_high_hz: 40.0
+  baseline_window: 200
+
+iot:
+  target_rate: 250.0
+  noise_amplitude: 0.035
+  lead_index: 0
+  seed: 1234
+
+federation:
+  rounds: 30
+  n_classes: 5
+  ridge: 0.01
+  washout: 50
+  max_signal_length: 2000
+  batch_size: 64
+  gate_objective: iot_present_macro_f1
+  gate_tolerance: 0.02
+  min_data_fraction: 0.3
+  personal_weight: 1.0
+  transmission_noise_sigma: 0.0
+  final_round_window: 3
+
+clients:
+  - { id: hospital_ptbxl,       dataset: ptb-xl,               tier: hospital, records: 8000 }
+  - { id: hospital_georgia,     dataset: georgia,              tier: hospital, records: 6000 }
+  - { id: hospital_cpsc_extra,  dataset: cpsc_2018_extra,      tier: hospital, records: 3400 }
+  - { id: wearable_ningbo,      dataset: ningbo,               tier: wearable, records: 8000 }
+  - { id: wearable_chapman,     dataset: chapman_shaoxing,     tier: wearable, records: 6000 }
+  - { id: wearable_incart,      dataset: st_petersburg_incart, tier: wearable, records: 74 }
+  - { id: iot_cpsc_a,           dataset: cpsc_2018,            tier: iot,      records: 2800 }
+  - { id: iot_cpsc_b,           dataset: cpsc_2018,            tier: iot,      records: 2300 }
+  - { id: iot_cpsc_c,           dataset: cpsc_2018,            tier: iot,      records: 1700 }

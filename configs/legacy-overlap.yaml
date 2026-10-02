@@ -1,0 +1,45 @@
+# Reproduces the client sampling used by the original Kotlin implementation.
+#
+# The three IoT clients request 7500 records in total from cpsc_2018, which holds 6877.
+# With `disjoint_clients: false` each client samples the shared pool independently, so
+# their records overlap and a recording can appear in one client's training split and
+# another's validation split. Kept only so that the earlier results can be reproduced;
+# use configs/full.yaml for new work.
+
+name: tiered-fl-legacy-overlap
+
+data_root: data
+output_dir: results
+cache_dir: .feature_cache
+
+seed: 0
+scale: 1.0
+disjoint_clients: false
+
+reservoir:
+  size: 1000
+  spectral_radius: 0.95
+  leaking_rate: 0.3
+  density: 0.1
+  seed: 42
+
+federation:
+  rounds: 30
+  n_classes: 5
+  ridge: 0.01
+  washout: 50
+  max_signal_length: 2000
+  gate_objective: iot_present_macro_f1
+  gate_tolerance: 0.02
+  personal_weight: 1.0
+
+clients:
+  - { id: hospital_ptbxl,       dataset: ptb-xl,               tier: hospital, records: 8000 }
+  - { id: hospital_georgia,     dataset: georgia,              tier: hospital, records: 6000 }
+  - { id: hospital_cpsc_extra,  dataset: cpsc_2018_extra,      tier: hospital, records: 3500 }
+  - { id: wearable_ningbo,      dataset: ningbo,               tier: wearable, records: 8000 }
+  - { id: wearable_chapman,     dataset: chapman_shaoxing,     tier: wearable, records: 6000 }
+  - { id: wearable_incart,      dataset: st_petersburg_incart, tier: wearable, records: 74 }
+  - { id: iot_cpsc1,            dataset: cpsc_2018,            tier: iot,      records: 3000 }
+  - { id: iot_cpsc2,            dataset: cpsc_2018,            tier: iot,      records: 2500 }
+  - { id: iot_cpsc3,            dataset: cpsc_2018,            tier: iot,      records: 2000 }

@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+title: Tiered federated learning for ECG classification
+message: If you use this software, please cite it as below.
+type: software
+authors:
+  - family-names: Shallal
+    given-names: Osama
+license: MIT
+repository-code: https://github.com/osamax2009/tiered-fl-ecg
+abstract: >-
+  Federated learning across device tiers that differ in sensing capability, using
+  echo state networks with validation-gated aggregation and per-tier personalised
+  readouts, evaluated on the PhysioNet/CinC Challenge 2021 ECG data.
+keywords:
+  - federated learning
+  - reservoir computing
+  - electrocardiography
+  - edge computing

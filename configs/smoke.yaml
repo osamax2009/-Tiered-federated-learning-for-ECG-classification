@@ -1,0 +1,41 @@
+# Small run that exercises the whole pipeline end to end in a few minutes.
+#
+# Useful for checking a data root, a code change or a new gate objective before
+# committing to a full run. The numbers it produces are not meaningful: the classes are
+# chosen from a few hundred records and most clients hold only a handful per class.
+
+name: tiered-fl-smoke
+
+data_root: data
+output_dir: results
+cache_dir: .feature_cache
+
+seed: 0
+scale: 1.0
+disjoint_clients: true
+
+reservoir:
+  size: 200
+  spectral_radius: 0.95
+  leaking_rate: 0.3
+  density: 0.1
+  seed: 42
+
+federation:
+  rounds: 5
+  n_classes: 5
+  ridge: 0.01
+  washout: 50
+  max_signal_length: 1000
+  batch_size: 32
+  gate_objective: iot_present_macro_f1
+  gate_tolerance: 0.02
+  final_round_window: 2
+
+clients:
+  - { id: hospital_ptbxl,   dataset: ptb-xl,           tier: hospital, records: 120 }
+  - { id: hospital_georgia, dataset: georgia,          tier: hospital, records: 120 }
+  - { id: wearable_ningbo,  dataset: ningbo,           tier: wearable, records: 120 }
+  - { id: wearable_chapman, dataset: chapman_shaoxing, tier: wearable, records: 120 }
+  - { id: iot_cpsc_a,       dataset: cpsc_2018,        tier: iot,      records: 120 }
+  - { id: iot_cpsc_b,       dataset: cpsc_2018,        tier: iot,      records: 100 }
