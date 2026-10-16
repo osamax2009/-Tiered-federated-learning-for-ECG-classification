@@ -1,154 +1,195 @@
 # Tiered federated learning for ECG classification
 
-Federated learning across device tiers that differ in what they can physically record.
-A hospital ECG captures twelve leads at 500 Hz; a wrist wearable captures one noisy lead
-at 250 Hz. Training one shared model over both leaves the constrained tier evaluated
-under a readout shaped largely by signals it could never acquire — and the constrained
-tier is usually the deployment target.
+This repository contains reproducible research code for ECG classification across
+clients with different sensing capabilities. It studies how to combine information
+from clinical ECG sources with models intended for wearable and single-lead devices.
 
-This repository implements and evaluates two mechanisms for that problem:
+The code implements a round-based federated comparison using validation-gated
+aggregation and a personalised readout for each device tier, compared with a FedAvg
+baseline.
 
-- **Validation-gated aggregation.** Each round the server interpolates between weighted
-  FedAvg and per-class selective aggregation, and keeps the mixture that maximises a
-  stated objective for the weak tier, subject to the shared model not regressing beyond
-  a fixed tolerance.
-- **A per-tier personalised readout.** Clients in a tier fit a readout locally, transmit
-  only the weights, and the server averages them. Patient-derived representations never
-  leave the device.
+The experiment uses an echo state network (ESN) as a fixed feature extractor and fits a
+regularised linear readout. The readout is trained with a closed-form solve; the project
+does not require a deep-learning framework. This is research software and the IoT ECG
+signals are simulated from clinical recordings, not collected from wearable devices.
 
-Classification uses an echo state network: a fixed sparse reservoir as the feature map
-and a ridge-fitted linear readout. Only the readout is trained, so a client's local step
-is one linear solve and the per-round payload is a 5×1001 matrix — about 40 KB.
+## Dataset
 
-## Install
+The experiments use the [PhysioNet/Computing in Cardiology Challenge 2021 training
+set](https://physionet.org/content/challenge-2021/1.0.3/). It contains multiple ECG
+corpora with different sources and populations. The current configurations use these
+corpus directories:
+
+| Directory | Use in the configurations |
+|---|---|
+| `ptb-xl` | Hospital tier |
+| `georgia` | Hospital tier |
+| `cpsc_2018_extra` | Hospital tier |
+| `ningbo` | Wearable tier |
+| `chapman_shaoxing` | Wearable tier |
+| `st_petersburg_incart` | Wearable tier |
+| `cpsc_2018` | IoT tier, degraded to a single-lead signal |
+
+The dataset is not included in this repository. Download it from PhysioNet and follow
+the dataset's access and use terms. The full training set is approximately 17 GB.
+From the repository root, it can be downloaded with:
+
+```bash
+wget -r -np -P data https://physionet.org/files/challenge-2021/1.0.3/training/
+```
+
+The loader accepts either the download root or the `training/` directory as the data
+root. Records are read from the Challenge's header and signal files. You can set another
+location in a YAML configuration or override it with `--data-root`.
+
+## Code and methodology
+
+### Round-based experiment
+
+The primary pipeline is under `src/tieredfl/` and is configured by YAML files in
+`configs/`. The default full configuration defines nine clients across the hospital,
+wearable, and IoT tiers. Clients draw from different data sources, creating a naturally
+non-IID setting. Records are allocated disjointly between clients by default; this is
+record-level partitioning, not patient-level partitioning.
+
+Each record is resampled to 500 Hz, adjusted to a fixed length, baseline-corrected,
+band-limited, and standardised per lead. The IoT tier is simulated by keeping one lead,
+downsampling it to 250 Hz, and adding configurable Gaussian noise. A fixed sparse ESN
+converts each signal into pooled features. Clients fit ridge-regression readouts locally.
+
+In each communication round, the server forms two candidate readouts: sample-weighted
+FedAvg and per-class selective aggregation. A validation gate chooses an interpolation
+between them to maximise the configured objective while keeping shared-model regression
+within a fixed tolerance when a candidate meets that constraint. If none meets it, the
+gate selects the best-scoring candidate and reports that the constraint was unmet. The
+personalised tier readout is fitted locally on each tier's clients; only readout weights
+are averaged for that head. The standard run reports these methods, reference baselines,
+and per-tier metrics.
+
+Important modules:
+
+| Path | Purpose |
+|---|---|
+| `src/tieredfl/data/` | Record loading, preprocessing, labels, and IoT degradation |
+| `src/tieredfl/model/` | Reservoir feature extractor and ridge readout |
+| `src/tieredfl/federated/` | Client updates, aggregation, validation gate, and tier heads |
+| `src/tieredfl/evaluation/` | Metrics and reference baselines |
+| `configs/` | Smoke, full-scale, and legacy run configurations |
+
+## Requirements
+
+- Python 3.9 or later
+- NumPy 1.24 or later
+- SciPy 1.10 or later
+- PyYAML 6.0 or later
+- `wget` to download the dataset using the command above
+
+The optional development dependencies are pytest and Ruff. Install them with the
+`dev` extra shown below.
+
+## Usage
+
+Run the commands below from the repository root.
+
+### 1. Install the project
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e '.[dev]'
+.venv/bin/python -m pip install -e '.[dev]'
 ```
 
-Requires Python 3.9+, numpy and scipy. No deep learning framework.
+### 2. Download and inspect the data
 
-## Data
-
-Uses the [PhysioNet/CinC Challenge 2021](https://physionet.org/content/challenge-2021/)
-training set, which is not redistributed here. The full set is about 17 GB.
+Download the Challenge data as described in the [Dataset](#dataset) section. Then check
+whether the configured record counts are available:
 
 ```bash
-wget -r -np https://physionet.org/files/challenge-2021/1.0.3/training/
+.venv/bin/tieredfl inspect --config configs/smoke.yaml --data-root data
 ```
 
-Point `data_root` at either the download root or the `training/` directory itself. Check
-what was found before committing to a long run:
+The default `data_root` is `data`. Use `--data-root` if the files are elsewhere.
+
+### 3. Run the round-based experiment
+
+The smoke configuration exercises the pipeline on a small subset. Its scores are for
+pipeline checks and should not be treated as research results.
 
 ```bash
-.venv/bin/tieredfl inspect --config configs/full.yaml --data-root /path/to/data
+./run.sh
 ```
 
-Seven sources are used, one per client, which is where the non-IID structure comes from:
-they differ in recruitment, demographics and label prevalence, so the partition is
-natural rather than synthetic.
-
-## Run
+Run the full configuration, or override the number of rounds:
 
 ```bash
-./run.sh                    # smoke config, a few minutes, checks the pipeline works
-./run.sh full               # full scale, 30 rounds
-./run.sh full --rounds 10   # trailing arguments pass through to the CLI
+./run.sh full
+./run.sh full --rounds 10
 ```
 
-`run.sh` logs to `logs/<config>_<timestamp>.log` and the run writes a JSON artefact to
-`results/`. Build tables and figures from the JSON rather than by parsing logs.
-
-Or drive the CLI directly:
+The script writes a timestamped log under `logs/` and a machine-readable JSON result
+under `results/`. To use the CLI directly:
 
 ```bash
 .venv/bin/tieredfl run --config configs/full.yaml
-.venv/bin/tieredfl cache --config configs/full.yaml      # extract features and stop
+.venv/bin/tieredfl cache --config configs/full.yaml
 ```
 
-Useful overrides: `--scale 0.1` (fraction of each client's records), `--rounds`,
-`--seed`, `--personal-weight` (0 = shared model, 1 = pure tier head), `--noise-sigma`.
+`cache` extracts and stores fixed-reservoir features, then exits. The cache is keyed by
+the settings that affect feature extraction and can be reused when changing rounds or
+the aggregation gate. Useful run options include `--scale 0.1`, `--rounds 10`,
+`--seed 42`, `--personal-weight 0`, and `--noise-sigma 0.01`. Use
+`.venv/bin/tieredfl run --help` for the full option list.
 
-### Feature caching
+## Results and reproducibility
 
-The reservoir is fixed, so a client's pooled states never change between rounds.
-Extraction therefore runs once per configuration and is cached under `.feature_cache/`,
-keyed by a hash of everything that affects it. This dominates total cost: the first run
-takes hours at full scale, and subsequent runs over the same features take minutes. The
-cache key deliberately excludes rounds, the gate objective and the personalisation
-weight, so sweeping those reuses the same features.
+Each run is determined by its YAML configuration and seed. The round-based run saves
+the effective configuration with its result. Record selection, IoT noise, and optional
+transmission noise are seeded. Feature extraction is cached under `.feature_cache/` by
+default.
 
-## Layout
+Seeded runs are intended to be repeatable under a fixed software and numerical
+environment. Exact results can differ across implementations or numerical backends.
+This repository is a port of an earlier Kotlin/JVM implementation; its figures are not
+bit-identical to the earlier runs because the random streams and linear-algebra backend
+differ. Recompute and cite figures from the implementation that produced them.
 
-```
-src/tieredfl/
-  data/         record reading, clinical preprocessing, IoT degradation, partitioning
-  model/        reservoir and ridge readout
-  federated/    clients, aggregation rules, the gate, per-tier personalisation
-  evaluation/   metrics and the IoT reference baselines
-  experiment.py the round loop
-  report.py     JSON artefacts and the console summary
-configs/        run definitions
-tests/          unit tests
-```
+Two interpretation points matter when reporting round-based results:
 
-## Reading the results
+- **Present-class macro F1** averages over classes that occur in the evaluated split.
+  Plain macro F1 averages over all five configured classes, including absent ones.
+- The default `personal_weight` is `1.0`, so IoT evaluation uses the tier head. At this
+  setting, the IoT scores do not measure the validation gate. Use `--personal-weight 0`
+  to evaluate the gate under the shared model, and compare the tier head against the
+  supplied IoT baselines to assess personalisation. See [`docs/notes.md`](docs/notes.md)
+  before interpreting default-run results.
 
-Two macro averages are reported. Plain macro F1 averages over all five classes, which
-penalises a tier for classes absent from its own validation split. **Present-class macro
-F1** averages only over classes that actually occur in the split being scored, and is
-the figure to compare across tiers.
+The IoT baselines use the same evaluation split:
 
-Every run scores four reference points for the IoT tier on the identical split, because
-a five-class accuracy figure for that tier is easy to misread:
-
-| baseline | what it establishes |
+| Baseline | What it measures |
 |---|---|
-| `majority` | the floor: always predict the most frequent present class |
-| `restricted_global` | the shared model with argmax restricted to present classes |
-| `local_only_mean` | each client's own head, unaggregated — if this matches `federated`, federating bought nothing |
-| `federated` | the aggregated tier head |
+| `majority` | Always predicting the most frequent class present in the split |
+| `restricted_global` | The shared model with predictions restricted to present classes |
+| `local_only_mean` | Mean performance of client heads before they are aggregated |
+| `federated` | Performance of the aggregated IoT tier head |
 
-Report gains against `majority` and `restricted_global`, not against an unrestricted
-five-way argmax.
+Compare IoT gains with `majority` and `restricted_global`, and use `local_only_mean` to
+check whether aggregation improves on leaving each client head local.
 
-> **Before reporting a default run**, read
-> [the first section of docs/notes.md](docs/notes.md). At `personal_weight: 1.0` the IoT
-> tier is evaluated under the tier head, which is fitted once before training — so IoT
-> figures are identical across the gated and baseline arms and constant across rounds,
-> and the gate's objective does not reach them. Use `--personal-weight 0` to evaluate
-> the gate, and the ablation block to evaluate the tier head.
+## Citations
 
-## Reproducibility
+If you use the Challenge data, cite its versioned PhysioNet record:
 
-A run is determined by its config file and seed. Record selection, IoT noise and
-transmission noise all derive from the run seed through `seeding.py`, which uses a
-content hash rather than `hash()` — the latter is salted per process and would make runs
-irreproducible.
+> Reyna, M., Sadr, N., Gu, A., Perez Alday, E. A., Liu, C., Seyedi, S., Shah, A., &
+> Clifford, G. D. (2022). *Will Two Do? Varying Dimensions in Electrocardiography: The
+> PhysioNet/Computing in Cardiology Challenge 2021* (version 1.0.3). PhysioNet.
+> https://doi.org/10.13026/34va-7q14
 
-The reservoir's spectral-radius rescaling needs care: ARPACK draws a random start vector
-unless given one, and the resulting estimate varies between calls by enough to change
-the rescaled weights in the sixth decimal, which is visible in the pooled states a few
-thousand steps later. The start vector is seeded for this reason.
+For the software citation, use [`CITATION.cff`](CITATION.cff).
 
-## Relationship to the earlier Kotlin implementation
+## License and contributions
 
-This is a port of a Kotlin/JVM implementation, reorganised around one configurable
-experiment rather than a file per variant. The algorithms, equations and hyperparameters
-match; the numbers will not be bit-identical, because the random streams differ and the
-linear algebra now runs through BLAS. Published figures from the earlier runs should be
-cited to that implementation, not to this one.
+The code is released under the MIT License; see [`LICENSE`](LICENSE). The dataset has
+separate access and use terms, which remain in effect.
 
-Three deliberate departures, all documented in [docs/notes.md](docs/notes.md):
-
-1. **Clients sharing a dataset get disjoint records.** The original sampled each client
-   independently from the shared pool, so the three IoT clients overlapped — a recording
-   could appear in one client's training split and another's validation split.
-   `configs/legacy-overlap.yaml` reproduces the original behaviour.
-2. **Record selection and IoT noise are seeded.** They were not before.
-3. **Features are cached to disk** rather than recomputed every run.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+Contributions are welcome through issues or pull requests. For changes that affect
+results, include the configuration and seed used, explain the methodological impact, and
+add or update focused tests where appropriate.
